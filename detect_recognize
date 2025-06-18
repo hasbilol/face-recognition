@@ -1,0 +1,94 @@
+import cv2
+import mediapipe as mp
+from insightface.app import FaceAnalysis
+import numpy as np
+import os, json
+from datetime import datetime
+
+# MediaPipe setup
+mp_drawing = mp.solutions.drawing_utils
+mp_face_detection = mp.solutions.face_detection
+
+# InsightFace setup
+face_recognizer = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+face_recognizer.prepare(ctx_id=-1)
+
+# Load known embeddings
+def load_known_faces(path="known_faces"):
+    db = {}
+    for file in os.listdir(path):
+        if file.lower().endswith((".jpg", ".png")):
+            img = cv2.imread(os.path.join(path, file))
+            faces = face_recognizer.get(img)
+            if faces:
+                name = os.path.splitext(file)[0]
+                db[name] = faces[0].normed_embedding
+    return db
+
+known_faces = load_known_faces()
+
+# Compare embeddings
+def recognize_face(embedding, threshold=0.6):
+    best_match = "Unknown"
+    best_score = -1
+    for name, known_emb in known_faces.items():
+        score = np.dot(embedding, known_emb) / (np.linalg.norm(embedding) * np.linalg.norm(known_emb))
+        if score > best_score and score > threshold:
+            best_match = name
+            best_score = score
+    return best_match, best_score
+
+# Webcam and detection
+cap = cv2.VideoCapture(0)
+with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as detector:
+    while cap.isOpened():
+        success, frame = cap.read()
+        if not success:
+            print("Ignoring empty frame.")
+            continue
+
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = detector.process(image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        if results.detections:
+            for detection in results.detections:
+                bbox = detection.location_data.relative_bounding_box
+                h, w, _ = image.shape
+                x1 = int(bbox.xmin * w)
+                y1 = int(bbox.ymin * h)
+                x2 = x1 + int(bbox.width * w)
+                y2 = y1 + int(bbox.height * h)
+
+                face_crop = image[y1:y2, x1:x2]
+                recog_faces = face_recognizer.get(face_crop)
+                name = "Unknown"
+                score = 0.0
+                if recog_faces:
+                    emb = recog_faces[0].normed_embedding
+                    name, score = recognize_face(emb)
+
+                # Draw everything on the original image
+                cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(image, f"{name} ({score:.2f})", (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+                # Now flip for display (after all drawing)
+                image = cv2.flip(image, 1)
+                cv2.imshow("Face Detection + Recognition", image)
+
+
+                # Log to file
+                log = {
+                    "PersonID": name,
+                    "DateTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Confidence": round(float(score), 2)
+                }
+                with open("detections.json", "a") as f:
+                    f.write(json.dumps(log) + "\n")
+
+        cv2.imshow("Face Detection + Recognition", cv2.flip(image, 1))
+        if cv2.waitKey(5) & 0xFF == 27:
+            break
+cap.release()
+cv2.destroyAllWindows()
