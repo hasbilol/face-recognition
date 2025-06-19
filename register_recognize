@@ -5,9 +5,10 @@ import numpy as np
 from datetime import datetime
 from insightface.app import FaceAnalysis
 
-# Init
+# Setup
 app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
 app.prepare(ctx_id=-1)
+
 KNOWN_FACE_DIR = "known_faces"
 os.makedirs(KNOWN_FACE_DIR, exist_ok=True)
 
@@ -25,6 +26,7 @@ def load_known_faces():
                 db[name].append(faces[0].normed_embedding)
     return db
 
+# Compare embedding
 def recognize_face(embedding, db, threshold=0.75):
     best_match, best_score = "Unknown", -1
     for name, embeddings in db.items():
@@ -35,14 +37,14 @@ def recognize_face(embedding, db, threshold=0.75):
                 best_score = score
     return best_match, best_score
 
-# Initialize
+# Webcam setup
 cap = cv2.VideoCapture(0)
 mode = None
 current_name = None
 sample_count = 0
 known_faces_db = load_known_faces()
 
-print("[INFO] Press R to Register, D to Detect/Recognize, ESC to Exit")
+print("[INFO] Press R to Register, D to Detect/Recognize, C to Clear Logs, K to Clear Faces, ESC to Exit")
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -63,37 +65,54 @@ while cap.isOpened():
         print("[INFO] Face recognition started...")
 
     elif key == ord('c'):
-        open("detections.json", "w").close()
-        print("[INFO] detections.json cleared")
-        cv2.putText(display_frame, "Log Cleared!", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        confirm = input("Are you sure you want to clear detections.json? (y/n): ").strip().lower()
+        if confirm == "y":
+            open("detections.json", "w").close()
+            print("[INFO] detections.json cleared")
+        else:
+            print("[INFO] Cancelled clearing detections.json.")
 
     elif key == ord('k'):
-        for file in os.listdir(KNOWN_FACE_DIR):
-            file_path = os.path.join(KNOWN_FACE_DIR, file)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-        print("[INFO] All known face images cleared.")
-        known_faces_db = load_known_faces()
-        cv2.putText(display_frame, "Known Faces Cleared!", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        confirm = input("Are you sure you want to delete all known faces? (y/n): ").strip().lower()
+        if confirm == "y":
+            for file in os.listdir(KNOWN_FACE_DIR):
+                file_path = os.path.join(KNOWN_FACE_DIR, file)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            print("[INFO] All known face images cleared.")
+            known_faces_db = load_known_faces()
+        else:
+            print("[INFO] Cancelled clearing known face images.")
 
-    
     elif key == 27:  # ESC
         print("[INFO] Exiting...")
         break
 
+    # REGISTER MODE
     if mode == "register" and sample_count < 3:
         faces = app.get(frame)
         if faces:
             face = faces[0]
-            filename = os.path.join(KNOWN_FACE_DIR, f"{current_name}_{sample_count+1}.jpg")
+
+            # Get next index for filename
+            existing = [f for f in os.listdir(KNOWN_FACE_DIR) if f.startswith(current_name)]
+            next_index = len(existing) + 1
+            filename = os.path.join(KNOWN_FACE_DIR, f"{current_name}_{next_index}.jpg")
             cv2.imwrite(filename, frame)
             print(f"[INFO] Saved {filename}")
+
+            # Selfie-style preview
+            cv2.imshow("Captured", frame)
+            cv2.waitKey(500)
+            cv2.destroyWindow("Captured")
+
             sample_count += 1
             if sample_count == 3:
                 print(f"[INFO] Registration complete for {current_name}")
                 known_faces_db = load_known_faces()
                 mode = None
 
+    # DETECT MODE
     elif mode == "detect":
         faces = app.get(frame)
         for face in faces:
@@ -113,8 +132,7 @@ while cap.isOpened():
             with open("detections.json", "a") as f:
                 f.write(json.dumps(log) + "\n")
 
-    cv2.imshow("Face App (R=Register, D=Detect, C=Clear Log, ESC=Exit)", display_frame)
-
+    cv2.imshow("Face App (R=Register, D=Detect, C=Clear Log, K=Clear Faces, ESC=Exit)", display_frame)
 
 cap.release()
 cv2.destroyAllWindows()
