@@ -1,0 +1,104 @@
+import cv2
+import os
+import json
+import numpy as np
+from datetime import datetime
+from insightface.app import FaceAnalysis
+
+# Init
+app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+app.prepare(ctx_id=-1)
+KNOWN_FACE_DIR = "known_faces"
+os.makedirs(KNOWN_FACE_DIR, exist_ok=True)
+
+# Load known faces
+def load_known_faces():
+    db = {}
+    for file in os.listdir(KNOWN_FACE_DIR):
+        if file.lower().endswith((".jpg", ".png")):
+            name = file.split("_")[0]
+            img = cv2.imread(os.path.join(KNOWN_FACE_DIR, file))
+            faces = app.get(img)
+            if faces:
+                if name not in db:
+                    db[name] = []
+                db[name].append(faces[0].normed_embedding)
+    return db
+
+def recognize_face(embedding, db, threshold=0.75):
+    best_match, best_score = "Unknown", -1
+    for name, embeddings in db.items():
+        for known_emb in embeddings:
+            score = np.dot(embedding, known_emb)
+            if score > best_score and score > threshold:
+                best_match = name
+                best_score = score
+    return best_match, best_score
+
+# Initialize
+cap = cv2.VideoCapture(0)
+mode = None
+current_name = None
+sample_count = 0
+known_faces_db = load_known_faces()
+
+print("[INFO] Press R to Register, D to Detect/Recognize, ESC to Exit")
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    display_frame = frame.copy()
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord('r'):
+        mode = "register"
+        current_name = input("Enter your name: ").strip()
+        sample_count = 0
+        print(f"[INFO] Registering {current_name}. Look at the camera...")
+
+    elif key == ord('d'):
+        mode = "detect"
+        print("[INFO] Face recognition started...")
+
+    elif key == 27:  # ESC
+        print("[INFO] Exiting...")
+        break
+
+    if mode == "register" and sample_count < 3:
+        faces = app.get(frame)
+        if faces:
+            face = faces[0]
+            filename = os.path.join(KNOWN_FACE_DIR, f"{current_name}_{sample_count+1}.jpg")
+            cv2.imwrite(filename, frame)
+            print(f"[INFO] Saved {filename}")
+            sample_count += 1
+            if sample_count == 3:
+                print(f"[INFO] Registration complete for {current_name}")
+                known_faces_db = load_known_faces()
+                mode = None
+
+    elif mode == "detect":
+        faces = app.get(frame)
+        for face in faces:
+            bbox = face.bbox.astype(int)
+            emb = face.normed_embedding
+            name, score = recognize_face(emb, known_faces_db)
+
+            cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
+            cv2.putText(display_frame, f"{name} ({score:.2f})", (bbox[0], bbox[1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+            log = {
+                "PersonID": name,
+                "DateTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Confidence": round(float(score), 2)
+            }
+            with open("detections.json", "a") as f:
+                f.write(json.dumps(log) + "\n")
+
+    cv2.imshow("Face App (R=Register, D=Detect, ESC=Exit)", display_frame)
+
+cap.release()
+cv2.destroyAllWindows()
