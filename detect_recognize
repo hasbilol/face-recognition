@@ -22,20 +22,26 @@ def load_known_faces(path="known_faces"):
             faces = face_recognizer.get(img)
             if faces:
                 name = os.path.splitext(file)[0]
-                db[name] = faces[0].normed_embedding
+                print(f"[INFO] Loaded: {name}")
+                if name not in db:
+                    db[name] = []
+                db[name].append(faces[0].normed_embedding)
+            else:
+                print(f"[WARNING] No face found in {file}")
     return db
 
 known_faces = load_known_faces()
 
 # Compare embeddings
-def recognize_face(embedding, threshold=0.6):
+def recognize_face(embedding, threshold=0.75):
     best_match = "Unknown"
     best_score = -1
-    for name, known_emb in known_faces.items():
-        score = np.dot(embedding, known_emb) / (np.linalg.norm(embedding) * np.linalg.norm(known_emb))
-        if score > best_score and score > threshold:
-            best_match = name
-            best_score = score
+    for name, embeddings in known_faces.items():
+        for known_emb in embeddings:
+            score = np.dot(embedding, known_emb) / (np.linalg.norm(embedding) * np.linalg.norm(known_emb))
+            if score > best_score and score > threshold:
+                best_match = name
+                best_score = score
     return best_match, best_score
 
 # Webcam and detection
@@ -55,10 +61,10 @@ with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence
             for detection in results.detections:
                 bbox = detection.location_data.relative_bounding_box
                 h, w, _ = image.shape
-                x1 = int(bbox.xmin * w)
-                y1 = int(bbox.ymin * h)
-                x2 = x1 + int(bbox.width * w)
-                y2 = y1 + int(bbox.height * h)
+                x1 = max(0, int(bbox.xmin * w))
+                y1 = max(0, int(bbox.ymin * h))
+                x2 = min(w, x1 + int(bbox.width * w))
+                y2 = min(h, y1 + int(bbox.height * h))
 
                 face_crop = image[y1:y2, x1:x2]
                 recog_faces = face_recognizer.get(face_crop)
@@ -87,8 +93,10 @@ with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence
                 with open("detections.json", "a") as f:
                     f.write(json.dumps(log) + "\n")
 
+        # Only flip once here for display
         cv2.imshow("Face Detection + Recognition", cv2.flip(image, 1))
         if cv2.waitKey(5) & 0xFF == 27:
             break
+
 cap.release()
 cv2.destroyAllWindows()
