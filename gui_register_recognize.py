@@ -5,7 +5,8 @@ import numpy as np
 from datetime import datetime
 import threading
 from tkinter import *
-from tkinter import simpledialog, messagebox
+from tkinter import simpledialog, messagebox, ttk   
+from tkinter import Toplevel, Label, ttk
 from PIL import Image, ImageTk
 from insightface.app import FaceAnalysis
 from fer import FER
@@ -44,6 +45,17 @@ def recognize_face(embedding, db, threshold=0.75):
                 best_score = score
     return best_match, best_score
 
+from tkinter import Toplevel, Label, ttk
+
+def show_registration_progress(root):
+    win = Toplevel(root)
+    win.title("Face Registration")
+    Label(win, text="Move your face slowly in different directions...\nCapturing frames...").pack(pady=10)
+    bar = ttk.Progressbar(win, orient=HORIZONTAL, length=300, mode='determinate', maximum=15)
+    bar.pack(pady=10)
+    return win, bar
+
+
 # App Class
 class FaceGUIApp:
     def __init__(self, root):
@@ -53,6 +65,10 @@ class FaceGUIApp:
 
         self.video_label = Label(root)
         self.video_label.pack()
+
+        self.instruction_label = Label(root, text="")
+        self.instruction_label.pack()
+
 
         Button(root, text="Register", command=self.register).pack(side=LEFT, padx=10)
         Button(root, text="Detect", command=self.detect).pack(side=LEFT, padx=10)
@@ -64,6 +80,7 @@ class FaceGUIApp:
         self.name = None
         self.cap = cv2.VideoCapture(0)
         self.frame = None
+        self.capture_count = 0
         self.update_video()
 
     def update_video(self):
@@ -81,20 +98,13 @@ class FaceGUIApp:
                 x1, y1, x2, y2 = bbox
 
                 roi = display_frame[y1:y2, x1:x2]
-                emotion_result = None
                 try:
                     emotion_result = emotion_detector.top_emotion(roi)
-                except Exception as e:
-                    print("[Emotion Error]", e)
+                except Exception:
+                    emotion_result = None
                 emotion, emo_score = emotion_result if emotion_result else ("Neutral", 0.0)
 
-
-                if emotion and emo_score is not None:
-                    label = f"{name} | {emotion} ({float(emo_score):.2f})"
-                else:
-                    label = f"{name} | Emotion: Unknown"
-
-
+                label = f"{name} ({score:.2f}) | {emotion}"
                 cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
                             0.6, (255, 255, 255), 2)
@@ -121,26 +131,36 @@ class FaceGUIApp:
         if not self.name:
             return
         self.mode = "register"
-        threading.Thread(target=self.capture_photos).start()
+        self.capture_count = 0
+        threading.Thread(target=self.capture_faces_progressively).start()
 
-    def capture_photos(self):
+    def capture_faces_progressively(self):
         print(f"[INFO] Registering {self.name}")
         existing = [int(f.split("_")[-1].split(".")[0]) for f in os.listdir(KNOWN_FACE_DIR)
                     if f.startswith(self.name + "_")]
         count = max(existing) + 1 if existing else 1
 
-        for i in range(3):
+        # Show progress window
+        progress_win, bar = show_registration_progress(self.root)
+        num_photos = 15
+
+        for i in range(num_photos):
             for j in range(3, 0, -1):
                 print(f"[INFO] Capturing in {j}...")
-                cv2.waitKey(1000)
+                cv2.waitKey(500)  # short wait before each capture
             filename = os.path.join(KNOWN_FACE_DIR, f"{self.name}_{count}.jpg")
             cv2.imwrite(filename, self.frame)
             print(f"[INFO] Saved {filename}")
             count += 1
+            bar['value'] = i + 1
+            progress_win.update_idletasks()
+            cv2.waitKey(500)
 
+        progress_win.destroy()
         print(f"[INFO] Registration complete for {self.name}")
         self.db = load_known_faces()
         self.mode = None
+
 
     def detect(self):
         print("[INFO] Detection mode activated")
