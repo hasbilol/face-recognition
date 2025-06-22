@@ -181,6 +181,7 @@ class FaceGUIApp:
     def quit_app(self):
         self.cap.release()
         self.root.destroy()
+        print("[INFO] Quitting application")
 
 if __name__ == '__main__':
     root = Tk()
