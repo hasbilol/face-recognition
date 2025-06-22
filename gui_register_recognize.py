@@ -5,8 +5,7 @@ import numpy as np
 from datetime import datetime
 import threading
 from tkinter import *
-from tkinter import simpledialog, messagebox, ttk   
-from tkinter import Toplevel, Label, ttk
+from tkinter import simpledialog, messagebox, ttk
 from PIL import Image, ImageTk
 from insightface.app import FaceAnalysis
 from fer import FER
@@ -45,16 +44,20 @@ def recognize_face(embedding, db, threshold=0.75):
                 best_score = score
     return best_match, best_score
 
-from tkinter import Toplevel, Label, ttk
-
+# Progress bar popup with instruction
 def show_registration_progress(root):
     win = Toplevel(root)
     win.title("Face Registration")
-    Label(win, text="Move your face slowly in different directions...\nCapturing frames...").pack(pady=10)
-    bar = ttk.Progressbar(win, orient=HORIZONTAL, length=300, mode='determinate', maximum=15)
-    bar.pack(pady=10)
-    return win, bar
 
+    instruction = Label(win, text="Initializing...", font=("Helvetica", 12))
+    instruction.pack(pady=(10, 0))
+
+    Label(win, text="Move your face slowly as instructed\nCapturing frames...").pack(pady=(5, 10))
+
+    bar = ttk.Progressbar(win, orient=HORIZONTAL, length=300, mode='determinate', maximum=10)
+    bar.pack(pady=10)
+
+    return win, bar, instruction
 
 # App Class
 class FaceGUIApp:
@@ -66,10 +69,6 @@ class FaceGUIApp:
         self.video_label = Label(root)
         self.video_label.pack()
 
-        self.instruction_label = Label(root, text="")
-        self.instruction_label.pack()
-
-
         Button(root, text="Register", command=self.register).pack(side=LEFT, padx=10)
         Button(root, text="Detect", command=self.detect).pack(side=LEFT, padx=10)
         Button(root, text="Clear Log", command=self.clear_log).pack(side=LEFT, padx=10)
@@ -80,7 +79,7 @@ class FaceGUIApp:
         self.name = None
         self.cap = cv2.VideoCapture(0)
         self.frame = None
-        self.capture_count = 0
+        self.last_emotion = ("Neutral", 0.0)
         self.update_video()
 
     def update_video(self):
@@ -100,9 +99,12 @@ class FaceGUIApp:
                 roi = display_frame[y1:y2, x1:x2]
                 try:
                     emotion_result = emotion_detector.top_emotion(roi)
+                    if emotion_result:
+                        self.last_emotion = emotion_result
                 except Exception:
-                    emotion_result = None
-                emotion, emo_score = emotion_result if emotion_result else ("Neutral", 0.0)
+                    pass
+
+                emotion, emo_score = self.last_emotion
 
                 label = f"{name} ({score:.2f}) | {emotion}"
                 cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -131,7 +133,6 @@ class FaceGUIApp:
         if not self.name:
             return
         self.mode = "register"
-        self.capture_count = 0
         threading.Thread(target=self.capture_faces_progressively).start()
 
     def capture_faces_progressively(self):
@@ -140,14 +141,27 @@ class FaceGUIApp:
                     if f.startswith(self.name + "_")]
         count = max(existing) + 1 if existing else 1
 
-        # Show progress window
-        progress_win, bar = show_registration_progress(self.root)
-        num_photos = 15
+        progress_win, bar, instruction_label = show_registration_progress(self.root)
+        expressions = [
+            "Neutral expression",
+            "Smile a little 😊",
+            "Smile widely 😄",
+            "Look to your left 👈",
+            "Look to your right 👉",
+            "Look up ⬆️",
+            "Look down ⬇️",
+            "Raise your eyebrows 😯",
+            "Close your eyes gently 😌",
+            "Relax your face again"
+        ]
 
-        for i in range(num_photos):
+        for i in range(len(expressions)):
+            instruction_label.config(text=f"Step {i+1}: {expressions[i]}")
+            instruction_label.update()
+
             for j in range(3, 0, -1):
                 print(f"[INFO] Capturing in {j}...")
-                cv2.waitKey(500)  # short wait before each capture
+                cv2.waitKey(500)
             filename = os.path.join(KNOWN_FACE_DIR, f"{self.name}_{count}.jpg")
             cv2.imwrite(filename, self.frame)
             print(f"[INFO] Saved {filename}")
@@ -160,7 +174,6 @@ class FaceGUIApp:
         print(f"[INFO] Registration complete for {self.name}")
         self.db = load_known_faces()
         self.mode = None
-
 
     def detect(self):
         print("[INFO] Detection mode activated")
