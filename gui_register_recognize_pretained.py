@@ -58,7 +58,7 @@ def recognize_face(embedding, db, threshold=0.75):
 def show_registration_progress(root):
     win = Toplevel(root)
     win.title("Face Registration")
-    Label(win, text="Move your face slowly in different directions...\nCapturing frames...").pack(pady=10)
+    Label(win, text="Move your face slowly in different directions...\nCapturing frames..33.").pack(pady=10)
     bar = ttk.Progressbar(win, orient=HORIZONTAL, length=300, mode='determinate', maximum=15)
     bar.pack(pady=10)
     return win, bar
