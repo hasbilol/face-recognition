@@ -1,4 +1,5 @@
 import cv2
+import time
 import os
 import json
 import numpy as np
@@ -9,6 +10,7 @@ from tkinter import simpledialog, messagebox, ttk
 from PIL import Image, ImageTk
 from insightface.app import FaceAnalysis
 from fer import FER
+from collections import deque, Counter
 
 # Config
 KNOWN_FACE_DIR = "known_faces"
@@ -66,6 +68,9 @@ class FaceGUIApp:
         self.root.title("Face Recognition + Emotion Detection")
         self.db = load_known_faces()
 
+        self.prev_time = time.time()
+        self.fps = 0.0
+
         self.video_label = Label(root)
         self.video_label.pack()
 
@@ -80,6 +85,8 @@ class FaceGUIApp:
         self.cap = cv2.VideoCapture(0)
         self.frame = None
         self.last_emotion = ("Neutral", 0.0)
+        self.emotion_buffer = deque(maxlen=5)
+        self.frame_count = 0
         self.update_video()
 
     def update_video(self):
@@ -89,6 +96,8 @@ class FaceGUIApp:
         self.frame = frame.copy()
         display_frame = frame.copy()
 
+        self.frame_count += 1
+
         if self.mode == "detect":
             faces = face_app.get(display_frame)
             for face in faces:
@@ -96,21 +105,38 @@ class FaceGUIApp:
                 name, score = recognize_face(face.normed_embedding, self.db)
                 x1, y1, x2, y2 = bbox
 
-                roi = display_frame[y1:y2, x1:x2]
-                try:
-                    emotion_result = emotion_detector.top_emotion(roi)
-                    if emotion_result:
-                        self.last_emotion = emotion_result
-                except Exception:
-                    pass
+                # Add margin to ROI
+                margin = 20
+                x1m = max(x1 - margin, 0)
+                y1m = max(y1 - margin, 0)
+                x2m = min(x2 + margin, display_frame.shape[1])
+                y2m = min(y2 + margin, display_frame.shape[0])
+                roi = display_frame[y1m:y2m, x1m:x2m]
 
+                # Detect emotion every 5 frames
+                if self.frame_count % 5 == 0:
+                    try:
+                        roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+                        roi_resized = cv2.resize(roi_rgb, (48, 48))
+                        emotion_result = emotion_detector.top_emotion(roi_resized)
+                        if emotion_result:
+                            self.emotion_buffer.append(emotion_result[0])
+                            common_emotion = Counter(self.emotion_buffer).most_common(1)[0]
+                            self.last_emotion = (common_emotion[0], emotion_result[1])
+                    except Exception:
+                        pass
+
+                # Use smoothed emotion
                 emotion, emo_score = self.last_emotion
 
-                label = f"{name} ({score:.2f}) | {emotion}"
+                emo_score_display = float(emo_score) if emo_score is not None else 0.0
+                label = f"{name} ({score:.2f}) | {emotion} ({emo_score_display:.2f})"
+
                 cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
                             0.6, (255, 255, 255), 2)
 
+                # Log detection
                 log = {
                     "PersonID": name,
                     "Emotion": emotion,
@@ -121,11 +147,24 @@ class FaceGUIApp:
                 with open(LOG_FILE, "a") as f:
                     f.write(json.dumps(log) + "\n")
 
+        # ✅ Calculate FPS
+        curr_time = time.time()
+        self.fps = 1 / (curr_time - self.prev_time)
+        self.prev_time = curr_time
+
+        # ✅ Draw FPS on frame
+        fps_text = f"FPS: {self.fps:.2f}"
+        cv2.putText(display_frame, fps_text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                    (255, 255, 0), 2)
+
         img = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(img)
         imgtk = ImageTk.PhotoImage(image=img)
         self.video_label.imgtk = imgtk
         self.video_label.configure(image=imgtk)
+
+        
+
         self.root.after(10, self.update_video)
 
     def register(self):
