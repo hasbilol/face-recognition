@@ -19,9 +19,9 @@ KNOWN_FACE_DIR = "known_faces"
 LOG_FILE = "detections.json"
 os.makedirs(KNOWN_FACE_DIR, exist_ok=True)
 
-DICT_EMO = {0: 'Neutral', 1: 'Happiness', 2: 'Sadness', 3: 'Surprise', 4: 'Fear', 5: 'Disgust', 6: 'Anger'}
+DICT_EMO = {0: 'Neutral', 1: 'Happy', 2: 'Sad', 3: 'Surprise', 4: 'Fear', 5: 'Disgust', 6: 'Angry'}
 
-print("✅ Running Face Recognition + Emotion Detection GUI App")
+print(" Running Face Recognition + Emotion Detection GUI App")
 
 # ========== Load FER Model ==========
 pth_backbone_model = ResNet50(7, channels=3)
