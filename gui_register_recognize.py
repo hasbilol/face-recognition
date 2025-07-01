@@ -11,7 +11,7 @@ from PIL import Image, ImageTk
 from insightface.app import FaceAnalysis
 from fer import FER
 from collections import deque, Counter
-
+#F
 # Config
 KNOWN_FACE_DIR = "known_faces"
 LOG_FILE = "detections.json"
