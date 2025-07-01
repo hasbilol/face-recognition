@@ -104,7 +104,8 @@ Tip: Register with different expressions for better matching.
 -Confidence
 
 4. All detections are logged in detections.json in this format:
-   {
+   
+{
   "person_id": "John",
   "emotion": "happy",
   "timestamp": "2025-07-01 23:30:00"
