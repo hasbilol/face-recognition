@@ -49,9 +49,9 @@ gui_register_recognize.py
 or 
 
 ```bash
-gui_register_recognize_pretained.py
+gui_register_recognize_pretained.py #pretained FER model from HuggingFace for better emotion detector
 ```
-*pretained version model from HuggingFace 
+
 
 ### 2. Interface Overview
 
