@@ -2,7 +2,7 @@
 
 This is a Python-based desktop GUI application that performs **real-time face recognition** and **emotion detection** using a webcam. The app allows you to **register new faces**, **recognize them later**, and **log their detected emotions** in a JSON file.
 
-## 🚀 Features
+## Features
 
 - Real-time **Face Recognition** using InsightFace
 - Real-time **Emotion Detection** using FER library
