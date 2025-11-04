@@ -14,6 +14,11 @@ import mediapipe as mp
 
 from fer_model import ResNet50, LSTMPyTorch, pth_processing, get_box
 
+print("CUDA available:", torch.cuda.is_available())
+print("Torch device count:", torch.cuda.device_count())
+print("Using device:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
+
+
 # ========== CONFIG ==========
 KNOWN_FACE_DIR = "known_faces"
 LOG_FILE = "detections.json"
@@ -37,7 +42,7 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 # ========== InsightFace Setup ==========
-face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+face_app = FaceAnalysis(name="buffalo_l", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
 face_app.prepare(ctx_id=-1)
 
 # ========== Load Known Faces ==========
@@ -218,14 +223,14 @@ class FaceGUIApp:
 
             for j in range(3, 0, -1):
                 print(f"[INFO] Capturing in {j}...")
-                cv2.waitKey(500)
+                time.sleep(0.5)
             filename = os.path.join(KNOWN_FACE_DIR, f"{self.name}_{count}.jpg")
             cv2.imwrite(filename, self.frame)
             print(f"[INFO] Saved {filename}")
             count += 1
             bar['value'] = i + 1
             progress_win.update_idletasks()
-            cv2.waitKey(500)
+            time.sleep(0.5)
 
         progress_win.destroy()
         print(f"[INFO] Registration complete for {self.name}")

@@ -1,5 +1,21 @@
-insightface
-opencv-python
-fer
-numpy
-Pillow
+# ==== Core GPU Stack ====
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+onnxruntime-gpu==1.23.2     # GPU backend for InsightFace
+
+# ==== Face Recognition & Emotion ====
+insightface==0.7.3
+fer==25.10.3
+mediapipe==0.10.14
+
+# ==== Vision & Utilities ====
+opencv-python==4.12.0.88
+numpy==2.2.6
+Pillow==12.0.0
+tqdm==4.67.1
+
+# ==== Optional GUI + Plot (already built-in with Tkinter on Windows) ====
+# Tkinter comes with Python; no need to install
