@@ -29,8 +29,8 @@ This is a Python-based desktop GUI application that performs **real-time face re
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/face-emotion-app.git
-cd face-emotion-app
+git clone https://github.com/your-username/face-recognition.git
+cd face-recognition
 ```
 
 ### 2. Install the required dependencies
